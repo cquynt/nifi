@@ -109,6 +109,8 @@ import {
     UploadProcessGroupRequest,
     VersionControlInformationEntity
 } from './index';
+import { AutoLayoutRequest } from '../shared';
+import { LayoutResult } from '../../service/layout-algorithms/layout-types';
 import { StatusHistoryRequest } from '../../../../state/status-history';
 import { FetchComponentVersionsRequest, RegistryClientEntity } from '../../../../state/shared';
 import { ErrorContext } from '../../../../state/error';
@@ -899,4 +901,19 @@ export const openChangeProcessorVersionDialog = createAction(
 export const openChangeColorDialog = createAction(
     `${CANVAS_PREFIX} Open Change Color Dialog`,
     props<{ request: ChangeColorRequest[] }>()
+);
+
+export const applyAutoLayout = createAction(
+    `${CANVAS_PREFIX} Apply Auto Layout`,
+    props<{ request: AutoLayoutRequest }>()
+);
+
+export const applyAutoLayoutSuccess = createAction(
+    `${CANVAS_PREFIX} Apply Auto Layout Success`,
+    props<{ response: LayoutResult }>()
+);
+
+export const applyAutoLayoutFailure = createAction(
+    `${CANVAS_PREFIX} Apply Auto Layout Failure`,
+    props<{ error: string }>()
 );

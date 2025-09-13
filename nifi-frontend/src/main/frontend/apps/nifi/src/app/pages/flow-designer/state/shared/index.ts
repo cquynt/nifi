@@ -17,6 +17,8 @@
 
 import { Permissions } from '@nifi/shared';
 import { VersionControlInformation } from '../flow';
+import { LayoutType, LayoutOptions } from '../../service/auto-layout.service';
+import { LayoutResult } from '../../service/layout-algorithms/layout-types';
 
 export interface Dimension {
     width: number;
@@ -40,4 +42,11 @@ export interface BreadcrumbEntity {
     versionedFlowState: string;
     breadcrumb: Breadcrumb;
     parentBreadcrumb?: BreadcrumbEntity;
+}
+
+export interface AutoLayoutRequest {
+    layoutType: LayoutType;
+    components: any[]; // Will be populated with ComponentEntity[]
+    connections?: any[]; // Will be populated with ComponentEntity[]
+    options?: LayoutOptions;
 }

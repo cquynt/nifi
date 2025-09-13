@@ -26,11 +26,12 @@ import { Storage } from '@nifi/shared';
 
 import { Birdseye } from './birdseye/birdseye.component';
 import { MatButtonModule } from '@angular/material/button';
+import { AutoLayoutControl } from '../auto-layout-control/auto-layout-control.component';
 
 @Component({
     selector: 'navigation-control',
     templateUrl: './navigation-control.component.html',
-    imports: [Birdseye, MatButtonModule],
+    imports: [Birdseye, MatButtonModule, AutoLayoutControl],
     styleUrls: ['./navigation-control.component.scss']
 })
 export class NavigationControl {

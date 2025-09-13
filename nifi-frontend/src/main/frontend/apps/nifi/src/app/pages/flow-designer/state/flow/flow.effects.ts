@@ -17,6 +17,7 @@
 
 import { DestroyRef, inject, Injectable } from '@angular/core';
 import { FlowService } from '../../service/flow.service';
+import { AutoLayoutService } from '../../service/auto-layout.service';
 import { Actions, createEffect, ofType } from '@ngrx/effects';
 import { concatLatestFrom } from '@ngrx/operators';
 import * as FlowActions from './flow.actions';
@@ -86,6 +87,7 @@ import {
     selectCurrentProcessGroupId,
     selectCurrentProcessGroupRevision,
     selectFlowLoadingStatus,
+    selectFlowState,
     selectInputPort,
     selectMaxZIndex,
     selectOutputPort,
@@ -206,7 +208,8 @@ export class FlowEffects {
         private parameterContextService: ParameterContextService,
         private extensionTypesService: ExtensionTypesService,
         private errorHelper: ErrorHelper,
-        private copyPasteService: CopyPasteService
+        private copyPasteService: CopyPasteService,
+        private autoLayoutService: AutoLayoutService
     ) {
         this.store
             .select(selectDocumentVisibilityState)
@@ -4618,4 +4621,171 @@ export class FlowEffects {
             ),
         { dispatch: false }
     );
+
+    applyAutoLayout$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(FlowActions.applyAutoLayout),
+            concatLatestFrom(() => [
+                this.store.select(selectFlowState),
+                this.store.select(selectCurrentProcessGroupId)
+            ]),
+            switchMap(([action, flowState, processGroupId]) => {
+                try {
+                    if (!flowState.flow?.processGroupFlow || !processGroupId) {
+                        return of(
+                            FlowActions.applyAutoLayoutFailure({
+                                error: 'No process group flow available'
+                            })
+                        );
+                    }
+
+                    const flowComponents = flowState.flow.processGroupFlow.flow;
+
+                    // Get all components that can be positioned
+                    const allComponents = [
+                        ...flowComponents.processors,
+                        ...flowComponents.processGroups,
+                        ...flowComponents.inputPorts,
+                        ...flowComponents.outputPorts,
+                        ...flowComponents.funnels,
+                        ...flowComponents.labels
+                    ];
+
+                    // Apply the layout algorithm
+                    const result = this.autoLayoutService.applyLayout(
+                        action.request.layoutType,
+                        allComponents,
+                        flowComponents.connections,
+                        action.request.options
+                    );
+
+                    // Convert layout result to position updates and save to backend
+                    const componentUpdates = allComponents
+                        .filter((comp) => result.positions.has(comp.id))
+                        .map((comp) => {
+                            const newPosition = result.positions.get(comp.id)!;
+                            return {
+                                id: comp.id,
+                                type: this.getComponentType(comp),
+                                uri: this.buildComponentUri(comp, processGroupId),
+                                errorStrategy: 'snackbar' as const,
+                                payload: {
+                                    revision: comp.revision,
+                                    disconnectedNodeAcknowledged:
+                                        this.clusterConnectionService.isDisconnectionAcknowledged(),
+                                    component: {
+                                        id: comp.id,
+                                        position: newPosition
+                                    }
+                                }
+                            };
+                        });
+
+                    console.log('Saving auto layout positions to backend:', componentUpdates.length, 'components');
+
+                    // Use updatePositions to save to backend instead of direct DOM manipulation
+                    this.store.dispatch(
+                        FlowActions.updatePositions({
+                            request: {
+                                requestId: Date.now(), // Use timestamp as request ID
+                                componentUpdates: componentUpdates,
+                                connectionUpdates: []
+                            }
+                        })
+                    );
+
+                    // Return success action
+                    return of(
+                        FlowActions.applyAutoLayoutSuccess({
+                            response: result
+                        })
+                    );
+                } catch (error: any) {
+                    return of(
+                        FlowActions.applyAutoLayoutFailure({
+                            error: `Failed to apply auto layout: ${error.message}`
+                        })
+                    );
+                }
+            }),
+            catchError((error) =>
+                of(
+                    FlowActions.applyAutoLayoutFailure({
+                        error: `Auto layout error: ${error.message}`
+                    })
+                )
+            )
+        )
+    );
+
+    private getComponentType(component: any): ComponentType {
+        // Determine component type based on component structure
+        if (component.component?.type === 'Processor') return ComponentType.Processor;
+        if (component.component?.name && component.component?.contents) return ComponentType.ProcessGroup;
+        if (component.component?.type === 'INPUT_PORT') return ComponentType.InputPort;
+        if (component.component?.type === 'OUTPUT_PORT') return ComponentType.OutputPort;
+        if (component.component?.type === 'Funnel') return ComponentType.Funnel;
+        if (component.component?.type === 'Label') return ComponentType.Label;
+        return ComponentType.Processor; // default
+    }
+
+    private buildComponentUri(component: any, processGroupId: string): string {
+        // Use the component's existing URI if available
+        if (component.uri) {
+            return component.uri;
+        }
+
+        // Fallback to constructing URI if not present
+        const componentType = this.getComponentType(component);
+        const baseUrl = '../nifi-api/process-groups/' + processGroupId;
+
+        switch (componentType) {
+            case ComponentType.Processor:
+                return `${baseUrl}/processors/${component.id}`;
+            case ComponentType.ProcessGroup:
+                return `${baseUrl}/process-groups/${component.id}`;
+            case ComponentType.InputPort:
+                return `${baseUrl}/input-ports/${component.id}`;
+            case ComponentType.OutputPort:
+                return `${baseUrl}/output-ports/${component.id}`;
+            case ComponentType.Funnel:
+                return `${baseUrl}/funnels/${component.id}`;
+            case ComponentType.Label:
+                return `${baseUrl}/labels/${component.id}`;
+            default:
+                return `${baseUrl}/processors/${component.id}`;
+        }
+    }
+
+    private applyPositionsDirectly(positions: Map<string, { x: number; y: number }>): void {
+        try {
+            console.log('Applying positions directly to DOM:', positions.size, 'components');
+
+            // Get all processor elements and apply positions by index
+            const processors = document.querySelectorAll('.component.processor');
+            console.log('Found processors in DOM:', processors.length);
+
+            const positionArray = Array.from(positions.values());
+            const componentIds = Array.from(positions.keys());
+
+            processors.forEach((processor, index) => {
+                if (index < positionArray.length) {
+                    const position = positionArray[index];
+                    const componentId = componentIds[index];
+
+                    const element = processor as HTMLElement;
+                    element.style.transform = `translate(${position.x}px, ${position.y}px)`;
+                    console.log(
+                        `Applied position to processor ${index} (${componentId}): (${position.x}, ${position.y})`
+                    );
+                } else {
+                    console.warn(`No position available for processor ${index}`);
+                }
+            });
+
+            console.log('Finished applying positions directly');
+        } catch (error) {
+            console.error('Error applying positions directly:', error);
+        }
+    }
 }

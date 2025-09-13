@@ -49,7 +49,8 @@ import {
     runOnce,
     stopVersionControlRequest,
     terminateThreads,
-    updatePositions
+    updatePositions,
+    applyAutoLayout
 } from '../state/flow/flow.actions';
 import { ComponentType } from '@nifi/shared';
 import {
@@ -59,6 +60,8 @@ import {
     OpenLocalChangesDialogRequest,
     UpdateComponentRequest
 } from '../state/flow';
+import { AutoLayoutRequest } from '../state/shared';
+import { LayoutType } from './auto-layout.service';
 import {
     ContextMenuDefinition,
     ContextMenuDefinitionProvider,
@@ -1162,6 +1165,40 @@ export class CanvasContextMenu implements ContextMenuDefinitionProvider {
                 clazz: 'fa',
                 text: 'Align',
                 subMenuId: this.ALIGN.id
+            },
+            {
+                condition: (selection: d3.Selection<any, any, any, any>) => {
+                    // Show for single component selection that can be used as root:
+                    // processors, funnels, input ports, output ports
+                    return (
+                        selection.size() === 1 &&
+                        (this.canvasUtils.isProcessor(selection) ||
+                            this.canvasUtils.isFunnel(selection) ||
+                            this.canvasUtils.isInputPort(selection) ||
+                            this.canvasUtils.isOutputPort(selection))
+                    );
+                },
+                clazz: 'fa fa-sitemap',
+                text: 'As Root Component',
+                action: (selection: d3.Selection<any, any, any, any>) => {
+                    const selectionData = selection.datum();
+
+                    // Create auto layout request with the selected component as root
+                    // Works with processors, funnels, input ports, and output ports
+                    // The effects will handle getting the actual components and connections from flow state
+                    const autoLayoutRequest: AutoLayoutRequest = {
+                        layoutType: LayoutType.HIERARCHICAL_ROOT,
+                        components: [], // Will be populated by effects from flow state
+                        connections: [], // Will be populated by effects from flow state
+                        options: {
+                            rootProcessorId: selectionData.id, // Note: parameter name kept for compatibility
+                            nodeSpacing: 150,
+                            rankSeparation: 120
+                        }
+                    };
+
+                    this.store.dispatch(applyAutoLayout({ request: autoLayoutRequest }));
+                }
             },
             {
                 condition: (selection: d3.Selection<any, any, any, any>) => {
