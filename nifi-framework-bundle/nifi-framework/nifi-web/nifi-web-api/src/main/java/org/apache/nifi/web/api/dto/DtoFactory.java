@@ -439,6 +439,7 @@ public final class DtoFactory {
        final ComponentStateDTO dto = new ComponentStateDTO();
        dto.setComponentId(componentId);
        dto.setStateDescription(getStateDescription(componentClass));
+       dto.setDropStateKeySupported(getDropStateKeySupported(componentClass));
        dto.setLocalState(createStateMapDTO(Scope.LOCAL, localState));
        dto.setClusterState(createStateMapDTO(Scope.CLUSTER, clusterState));
        return dto;
@@ -457,6 +458,22 @@ public final class DtoFactory {
        } else {
            return null;
        }
+   }
+
+   /**
+    * Gets whether dropping state by key is supported for the component.
+    * Defaults to false when annotation not present or field not specified.
+    *
+    * @param componentClass the component class
+    * @return true if dropping state by key is supported; false otherwise
+    */
+   private boolean getDropStateKeySupported(final Class<?> componentClass) {
+       final Stateful statefulAnnotation = componentClass.getAnnotation(Stateful.class);
+       boolean result = false;
+       if (statefulAnnotation != null) {
+           result = statefulAnnotation.dropStateKeySupported();
+       }
+       return result;
    }
 
    /**
@@ -1607,7 +1624,8 @@ public final class DtoFactory {
        dto.setRestricted(reportingTaskNode.isRestricted());
        dto.setDeprecated(reportingTaskNode.isDeprecated());
        dto.setExtensionMissing(reportingTaskNode.isExtensionMissing());
-       dto.setMultipleVersionsAvailable(compatibleBundles.size() > 1);
+       // Enable changing version on ghost reporting tasks when at least one compatible bundle exists
+       dto.setMultipleVersionsAvailable(reportingTaskNode.isExtensionMissing() ? !compatibleBundles.isEmpty() : compatibleBundles.size() > 1);
 
        final Map<String, String> defaultSchedulingPeriod = new HashMap<>();
        defaultSchedulingPeriod.put(SchedulingStrategy.TIMER_DRIVEN.name(), SchedulingStrategy.TIMER_DRIVEN.getDefaultSchedulingPeriod());
@@ -1695,7 +1713,8 @@ public final class DtoFactory {
        dto.setRestricted(parameterProviderNode.isRestricted());
        dto.setDeprecated(parameterProviderNode.isDeprecated());
        dto.setExtensionMissing(parameterProviderNode.isExtensionMissing());
-       dto.setMultipleVersionsAvailable(compatibleBundles.size() > 1);
+       // Enable changing version on ghost parameter providers when at least one compatible bundle exists
+       dto.setMultipleVersionsAvailable(parameterProviderNode.isExtensionMissing() ? !compatibleBundles.isEmpty() : compatibleBundles.size() > 1);
 
        // sort a copy of the properties
        final Map<PropertyDescriptor, String> sortedProperties = new TreeMap<>((o1, o2) -> Collator.getInstance(Locale.US).compare(o1.getName(), o2.getName()));
@@ -1807,7 +1826,8 @@ public final class DtoFactory {
        dto.setRestricted(controllerServiceNode.isRestricted());
        dto.setDeprecated(controllerServiceNode.isDeprecated());
        dto.setExtensionMissing(controllerServiceNode.isExtensionMissing());
-       dto.setMultipleVersionsAvailable(compatibleBundles.size() > 1);
+       // Enable changing version on ghost controller services when at least one compatible bundle exists
+       dto.setMultipleVersionsAvailable(controllerServiceNode.isExtensionMissing() ? !compatibleBundles.isEmpty() : compatibleBundles.size() > 1);
        dto.setVersionedComponentId(controllerServiceNode.getVersionedComponentId().orElse(null));
 
        // sort a copy of the properties
@@ -3339,7 +3359,8 @@ public final class DtoFactory {
        dto.setDeprecated(node.isDeprecated());
        dto.setExecutionNodeRestricted(node.isExecutionNodeRestricted());
        dto.setExtensionMissing(node.isExtensionMissing());
-       dto.setMultipleVersionsAvailable(compatibleBundleCount > 1);
+       // Enable changing version on ghost processors when at least one compatible bundle exists
+       dto.setMultipleVersionsAvailable(node.isExtensionMissing() ? compatibleBundleCount > 0 : compatibleBundleCount > 1);
        dto.setVersionedComponentId(node.getVersionedComponentId().orElse(null));
 
        dto.setType(node.getCanonicalClassName());
@@ -4929,7 +4950,8 @@ public final class DtoFactory {
        dto.setRestricted(flowRegistryClientNode.isRestricted());
        dto.setDeprecated(flowRegistryClientNode.isDeprecated());
        dto.setExtensionMissing(flowRegistryClientNode.isExtensionMissing());
-       dto.setMultipleVersionsAvailable(compatibleBundles.size() > 1);
+       // Enable changing version on ghost flow registry clients when at least one compatible bundle exists
+       dto.setMultipleVersionsAvailable(flowRegistryClientNode.isExtensionMissing() ? !compatibleBundles.isEmpty() : compatibleBundles.size() > 1);
 
        // sort a copy of the properties
        final Map<PropertyDescriptor, String> sortedProperties = new TreeMap<>((o1, o2) -> Collator.getInstance(Locale.US).compare(o1.getName(), o2.getName()));
@@ -5005,7 +5027,8 @@ public final class DtoFactory {
        dto.setRestricted(flowAnalysisRuleNode.isRestricted());
        dto.setDeprecated(flowAnalysisRuleNode.isDeprecated());
        dto.setExtensionMissing(flowAnalysisRuleNode.isExtensionMissing());
-       dto.setMultipleVersionsAvailable(compatibleBundles.size() > 1);
+       // Enable changing version on ghost flow analysis rules when at least one compatible bundle exists
+       dto.setMultipleVersionsAvailable(flowAnalysisRuleNode.isExtensionMissing() ? !compatibleBundles.isEmpty() : compatibleBundles.size() > 1);
 
        // sort a copy of the properties
        final Map<PropertyDescriptor, String> sortedProperties = new TreeMap<>(
